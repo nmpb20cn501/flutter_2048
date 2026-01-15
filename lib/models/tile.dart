@@ -18,28 +18,29 @@ class Tile {
   Tile(this.id, this.value, this.index, {this.nextIndex, this.merged = false});
 
   //Calculate the current top position based on the current index
-  double getTop(double size) {
-    var i = ((index + 1) / 4).ceil();
+  double getTop(double size, [int gridSize = 4]) {
+    var i = ((index + 1) / gridSize).ceil();
     return ((i - 1) * size) + (12.0 * i);
   }
 
   //Calculate the current left position based on the current index
-  double getLeft(double size) {
-    var i = (index - (((index + 1) / 4).ceil() * 4 - 4));
+  double getLeft(double size, [int gridSize = 4]) {
+    var i = (index - (((index + 1) / gridSize).ceil() * gridSize - gridSize));
     return (i * size) + (12.0 * (i + 1));
   }
 
   //Calculate the next top position based on the next index
-  double? getNextTop(double size) {
+  double? getNextTop(double size, [int gridSize = 4]) {
     if (nextIndex == null) return null;
-    var i = ((nextIndex! + 1) / 4).ceil();
+    var i = ((nextIndex! + 1) / gridSize).ceil();
     return ((i - 1) * size) + (12.0 * i);
   }
 
   //Calculate the next top position based on the next index
-  double? getNextLeft(double size) {
+  double? getNextLeft(double size, [int gridSize = 4]) {
     if (nextIndex == null) return null;
-    var i = (nextIndex! - (((nextIndex! + 1) / 4).ceil() * 4 - 4));
+    var i = (nextIndex! -
+        (((nextIndex! + 1) / gridSize).ceil() * gridSize - gridSize));
     return (i * size) + (12.0 * (i + 1));
   }
 

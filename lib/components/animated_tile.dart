@@ -10,7 +10,8 @@ class AnimatedTile extends AnimatedWidget {
       required this.scaleAnimation,
       required this.tile,
       required this.child,
-      required this.size})
+      required this.size,
+      this.gridSize = 4})
       : super(listenable: Listenable.merge([moveAnimation, scaleAnimation]));
 
   final Tile tile;
@@ -18,14 +19,15 @@ class AnimatedTile extends AnimatedWidget {
   final CurvedAnimation moveAnimation;
   final CurvedAnimation scaleAnimation;
   final double size;
+  final int gridSize;
   //Get the current top position based on current index of the tile
-  late final double _top = tile.getTop(size);
+  late final double _top = tile.getTop(size, gridSize);
   //Get the current left position based on current index of the tile
-  late final double _left = tile.getLeft(size);
+  late final double _left = tile.getLeft(size, gridSize);
   //Get the next top position based on current next index of the tile
-  late final double _nextTop = tile.getNextTop(size) ?? _top;
+  late final double _nextTop = tile.getNextTop(size, gridSize) ?? _top;
   //Get the next top position based on next index of the tile
-  late final double _nextLeft = tile.getNextLeft(size) ?? _left;
+  late final double _nextLeft = tile.getNextLeft(size, gridSize) ?? _left;
 
   //top tween used to move the tile from top to bottom
   late final Animation<double> top = Tween<double>(

@@ -8,19 +8,28 @@ import 'package:uuid/uuid.dart';
 
 import '../models/board.dart';
 import '../models/tile.dart';
+import 'grid_helper.dart';
 import 'next_direction.dart';
 import 'round.dart';
+import 'settings.dart';
+import 'sound_manager.dart';
 
 class BoardManager extends StateNotifier<Board> {
-  // We will use this list to retrieve the right index when user swipes up/down
-  // which will allow us to reuse most of the logic.
-  final verticalOrder = [12, 8, 4, 0, 13, 9, 5, 1, 14, 10, 6, 2, 15, 11, 7, 3];
-
   final Ref ref;
+
   BoardManager(this.ref) : super(Board.newGame(0, [])) {
     //Load the last saved state or start a new game.
     load();
   }
+
+  // Get current grid helper based on settings
+  GridHelper get _gridHelper {
+    final gridSize = ref.read(settingsManager).gridSize;
+    return GridHelper(gridSize);
+  }
+
+  // Get vertical order based on current grid size
+  List<int> get _verticalOrder => _gridHelper.verticalOrder;
 
   void load() async {
     //Access the box and get the first item at index 0
@@ -29,13 +38,21 @@ class BoardManager extends StateNotifier<Board> {
     //in order to construct the Board model
     //instead the adapter we added earlier will do that automatically.
     var box = await Hive.openBox<Board>('boardBox');
-    //If there is no save locally it will start a new game.
-    state = box.get(0) ?? _newGame();
+    var savedBoard = box.get(0);
+    //If there is save locally, load it. Otherwise start a new game but keep the best score
+    if (savedBoard != null) {
+      state = savedBoard;
+    } else {
+      // Start new game with best = 0 for first time
+      state = _newGame();
+    }
   }
 
   // Create New Game state.
   Board _newGame() {
-    return Board.newGame(state.best + state.score, [random([])]);
+    // Keep the current best score when starting a new game
+    int bestScore = state.best > state.score ? state.best : state.score;
+    return Board.newGame(bestScore, [random([])]);
   }
 
   // Start New Game
@@ -45,31 +62,21 @@ class BoardManager extends StateNotifier<Board> {
 
   // Check whether the indexes are in the same row or column in the board.
   bool _inRange(index, nextIndex) {
-    return index < 4 && nextIndex < 4 ||
-        index >= 4 && index < 8 && nextIndex >= 4 && nextIndex < 8 ||
-        index >= 8 && index < 12 && nextIndex >= 8 && nextIndex < 12 ||
-        index >= 12 && nextIndex >= 12;
+    return _gridHelper.inRange(index, nextIndex);
   }
 
   Tile _calculate(Tile tile, List<Tile> tiles, direction) {
+    final gridSize = _gridHelper.size;
+    final verticalOrder = _verticalOrder;
+
     bool asc =
         direction == SwipeDirection.left || direction == SwipeDirection.up;
     bool vert =
         direction == SwipeDirection.up || direction == SwipeDirection.down;
-    // Get the first index from the left in the row
-    // Example: for left swipe that can be: 0, 4, 8, 12
-    // for right swipe that can be: 3, 7, 11, 15
-    // depending which row in the column in the board we need
-    // let's say the title.index = 6 (which is the 3rd tile from the left and 2nd from right side, in the second row)
-    // ceil means it will ALWAYS round up to the next largest integer
-    // NOTE: don't confuse ceil it with floor or round as even if the value is 2.1 output would be 3.
-    // ((6 + 1) / 4) = 1.75
-    // Ceil(1.75) = 2
-    // If it's ascending: 2 * 4 – 4 = 4, which is the first index from the left side in the second row
-    // If it's descending: 2 * 4 – 1 = 7, which is the last index from the left side and first index from the right side in the second row
-    // If user swipes vertically use the verticalOrder list to retrieve the up/down index else use the existing index
+
     int index = vert ? verticalOrder[tile.index] : tile.index;
-    int nextIndex = ((index + 1) / 4).ceil() * 4 - (asc ? 4 : 1);
+    int nextIndex =
+        ((index + 1) / gridSize).ceil() * gridSize - (asc ? gridSize : 1);
 
     // If the list of the new tiles to be rendered is not empty get the last tile
     // and if that tile is in the same row as the curren tile set the next index for the current tile to be after the last tile
@@ -93,6 +100,8 @@ class BoardManager extends StateNotifier<Board> {
 
   //Move the tile in the direction
   bool move(SwipeDirection direction) {
+    final verticalOrder = _verticalOrder;
+
     bool asc =
         direction == SwipeDirection.left || direction == SwipeDirection.up;
     bool vert =
@@ -133,15 +142,20 @@ class BoardManager extends StateNotifier<Board> {
 
     // Assign immutable copy of the new board state and trigger rebuild.
     state = state.copyWith(tiles: tiles, undo: state);
+
+    // Play move sound
+    ref.read(soundManagerProvider).playMove();
+
     return true;
   }
 
   // Generates tiles at random place on the board
   Tile random(List<int> indexes) {
+    final totalTiles = _gridHelper.totalTiles;
     var i = 0;
     var rng = Random();
     do {
-      i = rng.nextInt(16);
+      i = rng.nextInt(totalTiles);
     } while (indexes.contains(i));
 
     return Tile(const Uuid().v4(), 2, i);
@@ -151,6 +165,7 @@ class BoardManager extends StateNotifier<Board> {
   void merge() {
     List<Tile> tiles = [];
     var tilesMoved = false;
+    var hasMerged = false; // Track if any tiles merged
     List<int> indexes = [];
     var score = state.score;
 
@@ -166,6 +181,7 @@ class BoardManager extends StateNotifier<Board> {
             tile.index == next.nextIndex && tile.nextIndex == null) {
           value = tile.value + next.value;
           merged = true;
+          hasMerged = true; // Mark that a merge happened
           score += tile.value;
           i += 1;
         }
@@ -187,16 +203,37 @@ class BoardManager extends StateNotifier<Board> {
     if (tilesMoved) {
       tiles.add(random(indexes));
     }
-    state = state.copyWith(score: score, tiles: tiles);
+
+    // Update best score if current score is higher
+    int best = state.best;
+    bool bestUpdated = false;
+    if (score > best) {
+      best = score;
+      bestUpdated = true;
+    }
+
+    state = state.copyWith(score: score, best: best, tiles: tiles);
+
+    // Play merge sound if tiles merged
+    if (hasMerged) {
+      ref.read(soundManagerProvider).playMerge();
+    }
+
+    // Save immediately if best score was updated
+    if (bestUpdated) {
+      save();
+    }
   }
 
   //Finish round, win or loose the game.
   void _endRound() {
+    final gridSize = _gridHelper.size;
+    final totalTiles = _gridHelper.totalTiles;
     var gameOver = true, gameWon = false;
     List<Tile> tiles = [];
 
     //If there is no more empty place on the board
-    if (state.tiles.length == 16) {
+    if (state.tiles.length == totalTiles) {
       state.tiles.sort(((a, b) => a.index.compareTo(b.index)));
 
       for (int i = 0, l = state.tiles.length; i < l; i++) {
@@ -207,7 +244,7 @@ class BoardManager extends StateNotifier<Board> {
           gameWon = true;
         }
 
-        var x = (i - (((i + 1) / 4).ceil() * 4 - 4));
+        var x = (i - (((i + 1) / gridSize).ceil() * gridSize - gridSize));
 
         if (x > 0 && i - 1 >= 0) {
           //If tile can be merged with left tile then game is not lost.
@@ -217,7 +254,7 @@ class BoardManager extends StateNotifier<Board> {
           }
         }
 
-        if (x < 3 && i + 1 < l) {
+        if (x < gridSize - 1 && i + 1 < l) {
           //If tile can be merged with right tile then game is not lost.
           var right = state.tiles[i + 1];
           if (tile.value == right.value) {
@@ -225,17 +262,17 @@ class BoardManager extends StateNotifier<Board> {
           }
         }
 
-        if (i - 4 >= 0) {
+        if (i - gridSize >= 0) {
           //If tile can be merged with above tile then game is not lost.
-          var top = state.tiles[i - 4];
+          var top = state.tiles[i - gridSize];
           if (tile.value == top.value) {
             gameOver = false;
           }
         }
 
-        if (i + 4 < l) {
+        if (i + gridSize < l) {
           //If tile can be merged with the bellow tile then game is not lost.
-          var bottom = state.tiles[i + 4];
+          var bottom = state.tiles[i + gridSize];
           if (tile.value == bottom.value) {
             gameOver = false;
           }
@@ -288,13 +325,17 @@ class BoardManager extends StateNotifier<Board> {
   //Move the tiles using the arrow keys on the keyboard.
   bool onKey(KeyEvent event) {
     SwipeDirection? direction;
-    if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.arrowRight)) {
+    if (HardwareKeyboard.instance
+        .isLogicalKeyPressed(LogicalKeyboardKey.arrowRight)) {
       direction = SwipeDirection.right;
-    } else if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.arrowLeft)) {
+    } else if (HardwareKeyboard.instance
+        .isLogicalKeyPressed(LogicalKeyboardKey.arrowLeft)) {
       direction = SwipeDirection.left;
-    } else if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.arrowUp)) {
+    } else if (HardwareKeyboard.instance
+        .isLogicalKeyPressed(LogicalKeyboardKey.arrowUp)) {
       direction = SwipeDirection.up;
-    } else if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.arrowDown)) {
+    } else if (HardwareKeyboard.instance
+        .isLogicalKeyPressed(LogicalKeyboardKey.arrowDown)) {
       direction = SwipeDirection.down;
     }
 

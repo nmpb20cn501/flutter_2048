@@ -7,7 +7,10 @@ import 'components/empy_board.dart';
 import 'components/score_board.dart';
 import 'components/tile_board.dart';
 import 'const/colors.dart';
+import 'const/colors_dark.dart';
 import 'managers/board.dart';
+import 'managers/settings.dart';
+import 'screens/settings_screen.dart';
 
 class Game extends ConsumerStatefulWidget {
   const Game({super.key});
@@ -64,6 +67,12 @@ class _GameState extends ConsumerState<Game>
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(settingsManager);
+    final isDark = settings.isDarkMode;
+    final bgColor = isDark ? backgroundColorDark : backgroundColor;
+    final txtColor = isDark ? textColorDark : textColor;
+    final btnColor = isDark ? buttonColorDark : buttonColor;
+
     return KeyboardListener(
       autofocus: true,
       focusNode: FocusNode(),
@@ -80,69 +89,103 @@ class _GameState extends ConsumerState<Game>
           }
         },
         child: Scaffold(
-          backgroundColor: backgroundColor,
-          body: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      '2048',
-                      style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 52.0),
-                    ),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const ScoreBoard(),
-                        const SizedBox(
-                          height: 32.0,
+          backgroundColor: bgColor,
+          body: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Settings button
+                Padding(
+                  padding: const EdgeInsets.only(right: 16.0, top: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SettingsScreen(),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: btnColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.settings,
+                            color: textColorWhite,
+                            size: 24,
+                          ),
                         ),
-                        Row(
-                          children: [
-                            ButtonWidget(
-                              icon: Icons.undo,
-                              onPressed: () {
-                                //Undo the round.
-                                ref.read(boardManager.notifier).undo();
-                              },
-                            ),
-                            const SizedBox(
-                              width: 16.0,
-                            ),
-                            ButtonWidget(
-                              icon: Icons.refresh,
-                              onPressed: () {
-                                //Restart the game
-                                ref.read(boardManager.notifier).newGame();
-                              },
-                            )
-                          ],
-                        )
-                      ],
-                    )
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(
-                height: 32.0,
-              ),
-              Stack(
-                children: [
-                  const EmptyBoardWidget(),
-                  TileBoardWidget(
-                      moveAnimation: _moveAnimation,
-                      scaleAnimation: _scaleAnimation)
-                ],
-              )
-            ],
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '2048',
+                        style: TextStyle(
+                            color: txtColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 52.0),
+                      ),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const ScoreBoard(),
+                          const SizedBox(
+                            height: 32.0,
+                          ),
+                          Row(
+                            children: [
+                              ButtonWidget(
+                                icon: Icons.undo,
+                                onPressed: () {
+                                  //Undo the round.
+                                  ref.read(boardManager.notifier).undo();
+                                },
+                              ),
+                              const SizedBox(
+                                width: 16.0,
+                              ),
+                              ButtonWidget(
+                                icon: Icons.refresh,
+                                onPressed: () {
+                                  //Restart the game
+                                  ref.read(boardManager.notifier).newGame();
+                                },
+                              )
+                            ],
+                          )
+                        ],
+                      )
+                    ],
+                  ),
+                ),
+                const SizedBox(
+                  height: 32.0,
+                ),
+                Stack(
+                  children: [
+                    const EmptyBoardWidget(),
+                    TileBoardWidget(
+                        moveAnimation: _moveAnimation,
+                        scaleAnimation: _scaleAnimation)
+                  ],
+                )
+              ],
+            ),
           ),
         ),
       ),
