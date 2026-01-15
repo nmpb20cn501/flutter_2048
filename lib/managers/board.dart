@@ -1,13 +1,13 @@
 import 'dart:math';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_swipe_detector/flutter_swipe_detector.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 
-import '../models/tile.dart';
 import '../models/board.dart';
-
+import '../models/tile.dart';
 import 'next_direction.dart';
 import 'round.dart';
 
@@ -16,7 +16,7 @@ class BoardManager extends StateNotifier<Board> {
   // which will allow us to reuse most of the logic.
   final verticalOrder = [12, 8, 4, 0, 13, 9, 5, 1, 14, 10, 6, 2, 15, 11, 7, 3];
 
-  final StateNotifierProviderRef ref;
+  final Ref ref;
   BoardManager(this.ref) : super(Board.newGame(0, [])) {
     //Load the last saved state or start a new game.
     load();
@@ -286,15 +286,15 @@ class BoardManager extends StateNotifier<Board> {
   }
 
   //Move the tiles using the arrow keys on the keyboard.
-  bool onKey(RawKeyEvent event) {
+  bool onKey(KeyEvent event) {
     SwipeDirection? direction;
-    if (event.isKeyPressed(LogicalKeyboardKey.arrowRight)) {
+    if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.arrowRight)) {
       direction = SwipeDirection.right;
-    } else if (event.isKeyPressed(LogicalKeyboardKey.arrowLeft)) {
+    } else if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.arrowLeft)) {
       direction = SwipeDirection.left;
-    } else if (event.isKeyPressed(LogicalKeyboardKey.arrowUp)) {
+    } else if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.arrowUp)) {
       direction = SwipeDirection.up;
-    } else if (event.isKeyPressed(LogicalKeyboardKey.arrowDown)) {
+    } else if (HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.arrowDown)) {
       direction = SwipeDirection.down;
     }
 
